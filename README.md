@@ -93,7 +93,6 @@ For the most reliable scraping performance, we recommend **[ScrapingAnt](https:/
 #### 🛜 Datacenter Proxies (Fast & Cost-Effective)
 Great for scraping mirrors and moderate-volume queries:
 * **[Get ScrapingAnt Datacenter Proxies](https://scrapingant.com/datacenter-proxies?ref=yjk4mme)**
-* Apply coupon code **`sanjeev_test`** during checkout on the Micro plan to receive **1 month of free proxy usage**.
 * Apply coupon code **`ENTHUSIAST_50`** during checkout for a **50% discount** on the Enthusiast plan.
 
 [![ScrapingAnt Datacenter Proxies](docs/datacenterproxies.png)](https://scrapingant.com/datacenter-proxies?ref=yjk4mme)
@@ -101,7 +100,6 @@ Great for scraping mirrors and moderate-volume queries:
 #### 🏠 Residential Proxies (Highly Anonymous)
 The gold standard for undetected scraping. Bypasses strict anti-scraping protections:
 * **[Get ScrapingAnt Residential Proxies](https://scrapingant.com/residential-proxies?ref=yjk4mme)**
-* Apply coupon code **`sanjeev_test`** during checkout on the Micro plan to receive **1 month of free proxy usage**.
 * Apply coupon code **`MICRO_50`** during checkout for a **50% discount** on the Micro residential plan.
 
 [![ScrapingAnt Residential Proxies](docs/ResidentialProxies.png)](https://scrapingant.com/residential-proxies?ref=yjk4mme)
