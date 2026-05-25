@@ -17,6 +17,15 @@ import tempfile
 from urllib.parse import urlparse
 from pathlib import Path
 
+# Prevent Unicode encoding issues in Windows console
+import sys
+if sys.platform.startswith('win'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
+
 # Load environment variables from .env file if it exists
 env_path = Path(__file__).parent / ".env"
 if env_path.exists():
@@ -28,16 +37,7 @@ if env_path.exists():
                 os.environ[key.strip()] = val.strip().strip('"').strip("'")
 
 # --- CONFIGURATION ---
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-MIRRORS = [
-    "https://old.reddit.com",
-    "https://redlib.catsarch.com",
-    "https://redlib.vsls.cz",
-    "https://r.nf",
-    "https://libreddit.northboot.xyz",
-    "https://redlib.tux.pizza"
-]
+from config import USER_AGENT, MIRRORS
 
 PROXY_URL = os.getenv("PROXY_URL", "")
 PROXY_TO_USE = ""
@@ -63,6 +63,31 @@ def rotate_session_proxy(country=None, session_id=None, force_rotate=False):
 SEEN_URLS = set()
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": USER_AGENT})
+
+def request_with_retry(url, retries=3, backoff=2, **kwargs):
+    """Makes a GET request with retry logic, especially useful for rotating proxies."""
+    for attempt in range(retries):
+        try:
+            rotate_session_proxy(force_rotate=True)
+            response = SESSION.get(url, **kwargs)
+            if response.status_code == 200:
+                content_type = response.headers.get("Content-Type", "")
+                if "application/json" in content_type:
+                    return response
+                elif ".json" in url and "text/html" in content_type:
+                    if "Making sure you're not a bot" in response.text or "bot check" in response.text.lower():
+                        raise requests.exceptions.RequestException("Bot challenge detected on mirror")
+                return response
+            elif response.status_code == 429:
+                time.sleep(backoff * (attempt + 1))
+            else:
+                raise requests.exceptions.HTTPError(f"HTTP {response.status_code}")
+        except Exception as e:
+            if attempt < retries - 1:
+                print(f"   ⚠️ Request failed: {e}. Retrying ({attempt + 2}/{retries})...")
+                time.sleep(backoff)
+            else:
+                raise e
 
 # --- DIRECTORY SETUP ---
 def setup_directories(target, prefix):
@@ -189,8 +214,7 @@ def download_media(url, save_path, media_type="image"):
         if os.path.exists(save_path):
             return True
         
-        rotate_session_proxy(force_rotate=True)
-        response = SESSION.get(url, timeout=30, stream=True)
+        response = request_with_retry(url, timeout=30, stream=True)
         if response.status_code == 200:
             with open(save_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -225,8 +249,7 @@ def download_reddit_video_with_audio(video_url, save_path):
         # Download video to temp file first
         with tempfile.NamedTemporaryFile(suffix='_video.mp4', delete=False) as video_temp:
             video_temp_path = video_temp.name
-            rotate_session_proxy(force_rotate=True)
-            response = SESSION.get(video_url, timeout=60, stream=True)
+            response = request_with_retry(video_url, timeout=60, stream=True)
             if response.status_code != 200:
                 return False
             for chunk in response.iter_content(chunk_size=8192):
@@ -236,7 +259,7 @@ def download_reddit_video_with_audio(video_url, save_path):
         audio_temp_path = None
         for audio_url in audio_urls:
             try:
-                response = SESSION.get(audio_url, timeout=30, stream=True)
+                response = request_with_retry(audio_url, timeout=30, stream=True)
                 if response.status_code == 200:
                     with tempfile.NamedTemporaryFile(suffix='_audio.mp4', delete=False) as audio_temp:
                         audio_temp_path = audio_temp.name
@@ -333,8 +356,7 @@ def scrape_comments(permalink, max_depth=3):
         else:
             url = f"{permalink}.json?limit=100"
         
-        rotate_session_proxy(force_rotate=True)
-        response = SESSION.get(url, timeout=15)
+        response = request_with_retry(url, timeout=15)
         if response.status_code != 200:
             return comments
         
@@ -495,8 +517,7 @@ def run_full_history(target, limit, is_user=False, download_media_flag=True,
                         target_url += f"&after={after}"
                     
                     print(f"\n📡 Fetching from: {base_url}")
-                    rotate_session_proxy(force_rotate=True)
-                    response = SESSION.get(target_url, timeout=15)
+                    response = request_with_retry(target_url, timeout=15)
                     
                     if response.status_code == 200:
                         data = response.json()

@@ -25,11 +25,9 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 # Sources: old.reddit.com for residential IPs, mirrors for data centers
 MIRRORS = [
     "https://old.reddit.com",
-    "https://redlib.catsarch.com",
-    "https://redlib.vsls.cz",
-    "https://r.nf",
-    "https://libreddit.northboot.xyz",
-    "https://redlib.tux.pizza"
+    "https://redlib.privadency.com",
+    "https://redlib.orangenet.cc",
+    "https://red.artemislena.eu"
 ]
 
 # Rate limiting
@@ -97,11 +95,10 @@ def get_formatted_proxy_url(proxy_url, country=None, session_id=None, force_rota
             
         # Determine target session ID
         target_session = session_id if session_id is not None else PROXY_SESSION_ID
-        
-        # If auto-rotation is enabled and no explicit session ID is given, or force_rotate is true
-        if (PROXY_AUTO_ROTATE or force_rotate) and not target_session:
-            # Generate random session ID
+        if target_session and target_session.lower() == "auto":
             target_session = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+        elif target_session and target_session.lower() == "none":
+            target_session = ""
             
         # Build new username
         # Keep customer-USERNAME part (typically parts[0] is 'customer' and parts[1] is the username)
