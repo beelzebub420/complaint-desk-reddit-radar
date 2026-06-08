@@ -12,6 +12,7 @@ import score_posts
 from score_posts import (
     SCORING_COLUMNS,
     fallback_score,
+    rule_based_score,
     sort_scored_rows,
     validate_score,
     write_scored_csv,
@@ -89,6 +90,28 @@ class RedditRadarTests(unittest.TestCase):
 
 
 class ScorePostsTests(unittest.TestCase):
+    def test_rule_based_score_high_medium_and_low(self):
+        high = rule_based_score(
+            {"title": "Zendesk refund complaint", "body": "", "matched_keywords": ""}
+        )
+        medium = rule_based_score(
+            {"title": "Our inbox is messy", "body": "", "matched_keywords": ""}
+        )
+        low = rule_based_score(
+            {"title": "Packaging supplier question", "body": "", "matched_keywords": ""}
+        )
+
+        self.assertEqual(high["relevance_score_1_10"], 9)
+        self.assertEqual(high["current_tool_mentioned"], "Zendesk")
+        self.assertTrue(high["dm_research_worthy"])
+        self.assertEqual(medium["relevance_score_1_10"], 6)
+        self.assertEqual(medium["pain_category"], "Inbox chaos")
+        self.assertFalse(medium["dm_research_worthy"])
+        self.assertEqual(low["relevance_score_1_10"], 3)
+        self.assertEqual(low["pain_category"], "Not relevant")
+        for result in [high, medium, low]:
+            self.assertEqual(validate_score(result), result)
+
     def test_validate_score_and_sort(self):
         valid = fallback_score("test")
         valid["relevance_score_1_10"] = 8
@@ -147,6 +170,22 @@ class ScorePostsTests(unittest.TestCase):
                 rows = list(csv.DictReader(csv_file))
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[0]["relevance_score_1_10"], "8")
+
+    def test_sample_csv_no_ai_needs_no_credentials(self):
+        sample_path = Path(__file__).resolve().parents[1] / "sample_raw_posts.csv"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "scored.csv"
+            with patch.dict(os.environ, {}, clear=True):
+                exit_code = score_posts.main(
+                    ["--input", str(sample_path), "--output", str(output), "--no-ai"]
+                )
+
+            self.assertEqual(exit_code, 0)
+            with output.open(newline="", encoding="utf-8") as csv_file:
+                rows = list(csv.DictReader(csv_file))
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["relevance_score_1_10"], "9")
+            self.assertEqual(rows[0]["urgency"], "high")
 
 
 if __name__ == "__main__":

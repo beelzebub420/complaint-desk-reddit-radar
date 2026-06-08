@@ -14,8 +14,8 @@ dashboard, SaaS product, outreach bot, or comment automation system.
 1. Fetches recent posts from a focused list of ecommerce and seller subreddits.
 2. Keeps posts whose title or body matches a relevant pain keyword.
 3. Exports a deduplicated, newest-first raw CSV.
-4. Optionally uses OpenAI to score and classify each post for Complaint Desk
-   research.
+4. Scores and classifies each post using OpenAI or deterministic local keyword
+   rules.
 
 Default subreddits:
 
@@ -73,7 +73,7 @@ OPENAI_API_KEY=your_openai_api_key
 ```
 
 The raw Reddit fetch does not need an OpenAI key. AI scoring does not need
-Reddit credentials.
+Reddit credentials. Rule-based scoring with `--no-ai` needs neither.
 
 ## Commands
 
@@ -99,6 +99,21 @@ AI-score a raw CSV:
 ```bash
 python3 score_posts.py --input raw_posts.csv --output scored_posts.csv
 ```
+
+Score locally with deterministic keyword rules and no OpenAI API key:
+
+```bash
+python3 score_posts.py \
+  --input raw_posts.csv \
+  --output scored_posts.csv \
+  --no-ai
+```
+
+The rule-based fallback assigns high relevance to direct complaint pain such as
+refunds, chargebacks, difficult customers, support tickets, damaged items,
+late delivery, Gorgias, or Zendesk. It assigns medium relevance to customer
+service, returns, inbox, or repeated-question matches, and low relevance
+otherwise.
 
 Score only the first 50 input rows or override the default model:
 
@@ -145,7 +160,8 @@ It is sorted by relevance score descending, then by newest post first.
 ```bash
 python3 score_posts.py \
   --input sample_raw_posts.csv \
-  --output sample_scored_posts.csv
+  --output sample_scored_posts.csv \
+  --no-ai
 ```
 
 ## Testing
@@ -168,5 +184,5 @@ This tool is for research and finding public conversations where you may be
 able to contribute helpful answers. Do not spam, mass-DM, automate comments,
 scrape aggressively, or violate Reddit rules.
 
-AI scores are research aids, not facts. Review every post yourself before
-commenting or sending a polite research message.
+AI and rule-based scores are research aids, not facts. Review every post
+yourself before commenting or sending a polite research message.

@@ -1,4 +1,4 @@
-"""AI-score raw Complaint Desk Reddit Radar CSV rows."""
+"""Score raw Complaint Desk Reddit Radar CSV rows with AI or keyword rules."""
 
 from __future__ import annotations
 
@@ -41,6 +41,65 @@ PAIN_CATEGORIES = [
     "Other relevant",
     "Not relevant",
 ]
+
+HIGH_RELEVANCE_KEYWORDS = [
+    "refund",
+    "chargeback",
+    "complaint",
+    "difficult customer",
+    "gorgias",
+    "zendesk",
+    "support ticket",
+    "damaged item",
+    "late delivery",
+]
+
+MEDIUM_RELEVANCE_KEYWORDS = [
+    "customer service",
+    "returns",
+    "inbox",
+    "repeated questions",
+]
+
+KNOWN_TOOLS = [
+    "Gorgias",
+    "Zendesk",
+    "Shopify Inbox",
+    "Gmail",
+    "HelpScout",
+    "Freshdesk",
+]
+
+CATEGORY_RULES = [
+    ("chargeback", "Chargeback threat"),
+    ("refund", "Refund outside policy"),
+    ("damaged item", "Damaged item complaint"),
+    ("late delivery", "Late delivery complaint"),
+    ("difficult customer", "Difficult customer"),
+    ("support ticket", "No ticket tracking"),
+    ("gorgias", "Support tools too expensive"),
+    ("zendesk", "Support tools too expensive"),
+    ("inbox", "Inbox chaos"),
+    ("repeated questions", "Repetitive questions"),
+    ("customer service", "General customer service"),
+    ("returns", "Other relevant"),
+    ("complaint", "General customer service"),
+]
+
+COMMENT_ANGLES = {
+    "Chargeback threat": "Suggest documenting the timeline, policy, and evidence before responding.",
+    "Refund outside policy": "Suggest using a consistent refund decision checklist and recording the exception.",
+    "Damaged item complaint": "Suggest collecting photos and order details before deciding the remedy.",
+    "Late delivery complaint": "Suggest separating carrier evidence from the customer response and next action.",
+    "Difficult customer": "Suggest keeping replies factual, calm, and tied to a clearly documented policy.",
+    "No ticket tracking": "Suggest treating each issue as a case with an owner, status, and next action.",
+    "Support tools too expensive": "Suggest listing the essential support workflow before comparing tool costs.",
+    "Inbox chaos": "Suggest assigning each conversation a status, owner, and next action.",
+    "Repetitive questions": "Suggest turning repeated answers into reusable templates with room for context.",
+    "General customer service": "Suggest documenting the issue, desired outcome, and next action before replying.",
+    "Other relevant": "Suggest recording the issue and applying a consistent response process.",
+    "Not relevant": "",
+}
 
 SYSTEM_PROMPT = """You classify Reddit posts for Complaint Desk research.
 
@@ -95,6 +154,54 @@ def fallback_score(reason: str) -> dict[str, Any]:
         "dm_research_worthy": False,
         "suggested_comment_angle": "",
         "reason": reason,
+    }
+
+
+def matching_keywords(text: str, keywords: Sequence[str]) -> list[str]:
+    return [keyword for keyword in keywords if keyword in text]
+
+
+def rule_based_score(row: dict[str, str]) -> dict[str, Any]:
+    """Score one row deterministically without using OpenAI."""
+    text = "\n".join(
+        [
+            row.get("title", ""),
+            row.get("body", ""),
+            row.get("matched_keywords", ""),
+        ]
+    ).casefold()
+    high_matches = matching_keywords(text, HIGH_RELEVANCE_KEYWORDS)
+    medium_matches = matching_keywords(text, MEDIUM_RELEVANCE_KEYWORDS)
+
+    if high_matches:
+        score = 9
+        urgency = "high"
+        matched = high_matches
+    elif medium_matches:
+        score = 6
+        urgency = "medium"
+        matched = medium_matches
+    else:
+        score = 3
+        urgency = "low"
+        matched = []
+
+    category = next(
+        (category for keyword, category in CATEGORY_RULES if keyword in text),
+        "Not relevant",
+    )
+    tools = [tool for tool in KNOWN_TOOLS if tool.casefold() in text]
+    match_summary = ", ".join(matched) if matched else "no configured relevance keywords"
+
+    return {
+        "relevance_score_1_10": score,
+        "pain_category": category,
+        "urgency": urgency,
+        "current_tool_mentioned": ", ".join(tools) if tools else "None",
+        "is_potential_beta_user": score >= 6,
+        "dm_research_worthy": score >= 9,
+        "suggested_comment_angle": COMMENT_ANGLES[category],
+        "reason": f"Rule-based {urgency} relevance match: {match_summary}.",
     }
 
 
@@ -221,7 +328,7 @@ def build_openai_client():
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="AI-score raw Complaint Desk Reddit Radar CSV rows."
+        description="Score raw Complaint Desk Reddit Radar CSV rows."
     )
     parser.add_argument(
         "--input", type=Path, default=Path("raw_posts.csv"), help="Raw CSV input path."
@@ -235,6 +342,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default=DEFAULT_MODEL, help="OpenAI model name.")
     parser.add_argument(
         "--max-rows", type=int, help="Only score the first N input rows."
+    )
+    parser.add_argument(
+        "--no-ai",
+        action="store_true",
+        help="Use deterministic keyword rules instead of OpenAI.",
     )
     return parser
 
@@ -258,8 +370,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Output: {args.output.resolve()}")
             return 0
 
-        load_dotenv_if_available()
-        client = build_openai_client()
+        client = None
+        if not args.no_ai:
+            load_dotenv_if_available()
+            client = build_openai_client()
     except (OSError, RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -268,8 +382,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     failed = 0
     for index, row in enumerate(raw_rows, start=1):
         try:
-            scoring = score_post(client, args.model, row)
-            print(f"Scored {index}/{len(raw_rows)}: {row.get('post_id', 'unknown')}")
+            if args.no_ai:
+                scoring = rule_based_score(row)
+                method = "Rule-scored"
+            else:
+                scoring = score_post(client, args.model, row)
+                method = "AI-scored"
+            print(f"{method} {index}/{len(raw_rows)}: {row.get('post_id', 'unknown')}")
         except Exception as exc:
             failed += 1
             scoring = fallback_score(f"Scoring failed: {type(exc).__name__}")
