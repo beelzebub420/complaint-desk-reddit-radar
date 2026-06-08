@@ -42,24 +42,21 @@ PAIN_CATEGORIES = [
     "Not relevant",
 ]
 
-HIGH_RELEVANCE_KEYWORDS = [
-    "refund",
-    "chargeback",
-    "complaint",
-    "difficult customer",
-    "gorgias",
-    "zendesk",
-    "support ticket",
-    "damaged item",
-    "late delivery",
+WEIGHTED_KEYWORDS = [
+    ("chargeback", 4),
+    ("refund", 3),
+    ("damaged item", 3),
+    ("difficult customer", 3),
+    ("support ticket", 2),
+    ("repeated questions", 2),
+    ("complaint", 2),
+    ("late delivery", 2),
+    ("customer service", 1),
+    ("returns", 1),
+    ("inbox", 1),
 ]
 
-MEDIUM_RELEVANCE_KEYWORDS = [
-    "customer service",
-    "returns",
-    "inbox",
-    "repeated questions",
-]
+EXPENSE_KEYWORDS = ["expensive", "cost", "pricing", "price", "afford", "too much"]
 
 KNOWN_TOOLS = [
     "Gorgias",
@@ -77,8 +74,6 @@ CATEGORY_RULES = [
     ("late delivery", "Late delivery complaint"),
     ("difficult customer", "Difficult customer"),
     ("support ticket", "No ticket tracking"),
-    ("gorgias", "Support tools too expensive"),
-    ("zendesk", "Support tools too expensive"),
     ("inbox", "Inbox chaos"),
     ("repeated questions", "Repetitive questions"),
     ("customer service", "General customer service"),
@@ -157,8 +152,34 @@ def fallback_score(reason: str) -> dict[str, Any]:
     }
 
 
-def matching_keywords(text: str, keywords: Sequence[str]) -> list[str]:
-    return [keyword for keyword in keywords if keyword in text]
+def weighted_matches(text: str) -> list[tuple[str, int]]:
+    """Return each configured pain signal once with its weight."""
+    matches = [(keyword, weight) for keyword, weight in WEIGHTED_KEYWORDS if keyword in text]
+    has_expense_signal = any(keyword in text for keyword in EXPENSE_KEYWORDS)
+    if has_expense_signal:
+        for tool in ["gorgias", "zendesk"]:
+            if tool in text:
+                matches.append((f"{tool} expensive", 4))
+    return matches
+
+
+def relevance_from_points(points: int) -> int:
+    """Map accumulated rule points onto the shared 1-10 relevance scale."""
+    if points >= 8:
+        return 10
+    if points >= 6:
+        return 9
+    if points >= 5:
+        return 8
+    if points >= 4:
+        return 7
+    if points >= 3:
+        return 6
+    if points >= 2:
+        return 4
+    if points >= 1:
+        return 3
+    return 1
 
 
 def rule_based_score(row: dict[str, str]) -> dict[str, Any]:
@@ -170,38 +191,35 @@ def rule_based_score(row: dict[str, str]) -> dict[str, Any]:
             row.get("matched_keywords", ""),
         ]
     ).casefold()
-    high_matches = matching_keywords(text, HIGH_RELEVANCE_KEYWORDS)
-    medium_matches = matching_keywords(text, MEDIUM_RELEVANCE_KEYWORDS)
+    matches = weighted_matches(text)
+    points = sum(weight for _, weight in matches)
+    score = relevance_from_points(points)
+    urgency = "high" if score >= 8 else "medium" if score >= 5 else "low"
 
-    if high_matches:
-        score = 9
-        urgency = "high"
-        matched = high_matches
-    elif medium_matches:
-        score = 6
-        urgency = "medium"
-        matched = medium_matches
+    expensive_tool_match = any(label.endswith(" expensive") for label, _ in matches)
+    if expensive_tool_match:
+        category = "Support tools too expensive"
     else:
-        score = 3
-        urgency = "low"
-        matched = []
-
-    category = next(
-        (category for keyword, category in CATEGORY_RULES if keyword in text),
-        "Not relevant",
-    )
+        category = next(
+            (category for keyword, category in CATEGORY_RULES if keyword in text),
+            "Not relevant",
+        )
     tools = [tool for tool in KNOWN_TOOLS if tool.casefold() in text]
-    match_summary = ", ".join(matched) if matched else "no configured relevance keywords"
+    match_summary = (
+        ", ".join(f"{label} (+{weight})" for label, weight in matches)
+        if matches
+        else "no configured weighted signals"
+    )
 
     return {
         "relevance_score_1_10": score,
         "pain_category": category,
         "urgency": urgency,
         "current_tool_mentioned": ", ".join(tools) if tools else "None",
-        "is_potential_beta_user": score >= 6,
-        "dm_research_worthy": score >= 9,
+        "is_potential_beta_user": score >= 5,
+        "dm_research_worthy": score >= 8,
         "suggested_comment_angle": COMMENT_ANGLES[category],
-        "reason": f"Rule-based {urgency} relevance match: {match_summary}.",
+        "reason": f"Weighted rule score {points}: {match_summary}.",
     }
 
 

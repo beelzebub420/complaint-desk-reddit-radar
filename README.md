@@ -109,11 +109,14 @@ python3 score_posts.py \
   --no-ai
 ```
 
-The rule-based fallback assigns high relevance to direct complaint pain such as
-refunds, chargebacks, difficult customers, support tickets, damaged items,
-late delivery, Gorgias, or Zendesk. It assigns medium relevance to customer
-service, returns, inbox, or repeated-question matches, and low relevance
-otherwise.
+The rule-based fallback adds weighted pain signals, then maps the total onto the
+same 1–10 relevance scale. Examples include `chargeback` +4, `refund` +3,
+`damaged item` +3, `difficult customer` +3, `support ticket` +2,
+`repeated questions` +2, and `customer service` +1. Gorgias or Zendesk receives
++4 only when the post also contains an expense or pricing signal. Multiple
+different signals accumulate, while repeated uses of the same signal count
+once. Point totals map to relevance as follows: 0 points = 1, 1 = 3, 2 = 4,
+3 = 6, 4 = 7, 5 = 8, 6–7 = 9, and 8+ = 10.
 
 Score only the first 50 input rows or override the default model:
 

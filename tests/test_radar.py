@@ -12,6 +12,7 @@ import score_posts
 from score_posts import (
     SCORING_COLUMNS,
     fallback_score,
+    relevance_from_points,
     rule_based_score,
     sort_scored_rows,
     validate_score,
@@ -90,27 +91,85 @@ class RedditRadarTests(unittest.TestCase):
 
 
 class ScorePostsTests(unittest.TestCase):
-    def test_rule_based_score_high_medium_and_low(self):
-        high = rule_based_score(
-            {"title": "Zendesk refund complaint", "body": "", "matched_keywords": ""}
+    def test_rule_based_score_accumulates_weighted_signals(self):
+        combined = rule_based_score(
+            {
+                "title": "Chargeback after damaged item",
+                "body": "The customer also wants a refund",
+                "matched_keywords": "",
+            }
         )
-        medium = rule_based_score(
-            {"title": "Our inbox is messy", "body": "", "matched_keywords": ""}
+        single = rule_based_score(
+            {"title": "Customer service question", "body": "", "matched_keywords": ""}
         )
-        low = rule_based_score(
+        none = rule_based_score(
             {"title": "Packaging supplier question", "body": "", "matched_keywords": ""}
         )
 
-        self.assertEqual(high["relevance_score_1_10"], 9)
-        self.assertEqual(high["current_tool_mentioned"], "Zendesk")
-        self.assertTrue(high["dm_research_worthy"])
-        self.assertEqual(medium["relevance_score_1_10"], 6)
-        self.assertEqual(medium["pain_category"], "Inbox chaos")
-        self.assertFalse(medium["dm_research_worthy"])
-        self.assertEqual(low["relevance_score_1_10"], 3)
-        self.assertEqual(low["pain_category"], "Not relevant")
-        for result in [high, medium, low]:
+        self.assertEqual(combined["relevance_score_1_10"], 10)
+        self.assertIn("Weighted rule score 10", combined["reason"])
+        self.assertTrue(combined["dm_research_worthy"])
+        self.assertEqual(single["relevance_score_1_10"], 3)
+        self.assertEqual(single["pain_category"], "General customer service")
+        self.assertFalse(single["is_potential_beta_user"])
+        self.assertEqual(none["relevance_score_1_10"], 1)
+        self.assertEqual(none["pain_category"], "Not relevant")
+        for result in [combined, single, none]:
             self.assertEqual(validate_score(result), result)
+
+    def test_expensive_tool_requires_tool_and_expense_signal(self):
+        gorgias_expensive = rule_based_score(
+            {
+                "title": "Gorgias pricing is too expensive",
+                "body": "",
+                "matched_keywords": "",
+            }
+        )
+        zendesk_expensive = rule_based_score(
+            {
+                "title": "Zendesk costs too much",
+                "body": "",
+                "matched_keywords": "",
+            }
+        )
+        neutral = rule_based_score(
+            {"title": "How do I configure Gorgias?", "body": "", "matched_keywords": ""}
+        )
+
+        self.assertEqual(gorgias_expensive["relevance_score_1_10"], 7)
+        self.assertEqual(
+            gorgias_expensive["pain_category"], "Support tools too expensive"
+        )
+        self.assertEqual(gorgias_expensive["current_tool_mentioned"], "Gorgias")
+        self.assertEqual(zendesk_expensive["relevance_score_1_10"], 7)
+        self.assertEqual(zendesk_expensive["current_tool_mentioned"], "Zendesk")
+        self.assertEqual(neutral["relevance_score_1_10"], 1)
+        self.assertEqual(neutral["pain_category"], "Not relevant")
+
+    def test_relevance_point_mapping_boundaries(self):
+        expected = {
+            0: 1,
+            1: 3,
+            2: 4,
+            3: 6,
+            4: 7,
+            5: 8,
+            6: 9,
+            8: 10,
+        }
+        for points, relevance in expected.items():
+            self.assertEqual(relevance_from_points(points), relevance)
+
+    def test_repeated_keyword_counts_once(self):
+        result = rule_based_score(
+            {
+                "title": "Refund refund refund",
+                "body": "Still asking about the refund",
+                "matched_keywords": "refund",
+            }
+        )
+        self.assertEqual(result["relevance_score_1_10"], 6)
+        self.assertIn("Weighted rule score 3", result["reason"])
 
     def test_validate_score_and_sort(self):
         valid = fallback_score("test")
