@@ -1,2 +1,1 @@
-# Search module
-from .query import *
+"""Legacy search package; not used by Complaint Desk Reddit Radar V1."""

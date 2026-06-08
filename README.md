@@ -1,385 +1,172 @@
-# 🤖 Universal Reddit Scraper Suite
+# Complaint Desk Reddit Radar
 
-[![Docker Build & Publish](https://github.com/ksanjeev284/reddit-universal-scraper/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/ksanjeev284/reddit-universal-scraper/actions/workflows/docker-publish.yml)
+Complaint Desk Reddit Radar is a lightweight local command-line research tool.
+It finds recent public Reddit posts from ecommerce operators and small business
+owners who may be struggling with customer complaints, refunds, chargebacks,
+returns, difficult customers, repetitive questions, support tools, or inbox
+chaos.
 
-A **full-featured** Reddit scraper with analytics dashboard, REST API, scheduled scraping, plugins, and more. **No API keys required!**
+The tool produces CSV files for manual research and prospecting. It is not a
+dashboard, SaaS product, outreach bot, or comment automation system.
 
-<img width="2558" height="1331" alt="image" src="https://github.com/user-attachments/assets/180b89ce-db02-4cd2-922d-aa3d1b8eeda7" />
+## What It Does
 
-## ✨ Features
+1. Fetches recent posts from a focused list of ecommerce and seller subreddits.
+2. Keeps posts whose title or body matches a relevant pain keyword.
+3. Exports a deduplicated, newest-first raw CSV.
+4. Optionally uses OpenAI to score and classify each post for Complaint Desk
+   research.
 
-| Feature | Description |
-|---------|-------------|
-| 📊 **Full Scraping** | Posts, comments, images, videos, galleries |
-| 📈 **Web Dashboard** | Beautiful Streamlit UI with 7 tabs |
-| 🚀 **REST API** | Connect Metabase, Grafana, DuckDB |
-| 🔌 **Plugin System** | Extensible post-processing (sentiment, dedupe, keywords) |
-| 📋 **Job Tracking** | Full history with status, duration, errors |
-| 🧪 **Dry Run Mode** | Test scrape rules without saving data |
-| 📦 **Parquet Export** | Analytics-ready format for DuckDB/warehouses |
-| 😀 **Sentiment Analysis** | Analyze post/comment sentiment |
-| 📅 **Scheduled Scraping** | Cron-style job scheduling |
-| 📧 **Notifications** | Discord & Telegram alerts |
-| 🗄️ **SQLite Database** | Structured storage with auto-backup |
+Default subreddits:
 
----
+- `shopify`
+- `ecommerce`
+- `smallbusiness`
+- `FulfillmentByAmazon`
+- `EtsySellers`
+- `EbaySellerAdvice`
 
-## 🚀 Quick Start
+## Setup
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Scrape a subreddit
-python main.py python --mode full --limit 100
-
-# Launch dashboard
-python main.py --dashboard
-# Opens at http://localhost:8501
-```
-
-### 📋 Requirements
-
-- **Python 3.8+**
-- **ffmpeg** (optional, for video with audio)
+Requires Python 3.10 or newer.
 
 ```bash
-# Windows (via chocolatey)
-choco install ffmpeg
-
-# macOS
-brew install ffmpeg
-
-# Ubuntu/Debian
-sudo apt install ffmpeg
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
+cp .env.example .env
 ```
 
----
+On Windows, activate the environment with:
 
-## 🔒 Proxies
+```powershell
+.venv\Scripts\activate
+```
 
-To prevent IP blocks, rate limits, and captcha challenges when scraping Reddit at scale, you can configure proxies. Both the standard synchronous scraper and the asynchronous scraper support HTTP and HTTPS proxies.
+### Reddit API Credentials
 
-### Configuration
+Create a Reddit script app at
+[reddit.com/prefs/apps](https://www.reddit.com/prefs/apps):
 
-You can configure proxies in four ways:
+1. Sign in and choose **create another app**.
+2. Select the **script** application type.
+3. Use any valid redirect URI, such as `http://localhost:8080`.
+4. Copy the app ID shown under the app name into `REDDIT_CLIENT_ID`.
+5. Copy the secret into `REDDIT_CLIENT_SECRET`.
+6. Set a descriptive `REDDIT_USER_AGENT` containing your Reddit username.
 
-1. **Command Line / CLI**:
-   Pass the `--proxy` flag to override global configurations:
-   ```bash
-   python main.py python --limit 100 --proxy "http://username:password@host:port"
-   ```
-2. **Environment Variable**:
-   ```bash
-   export PROXY_URL="http://username:password@host:port"
-   ```
-3. **Configuration File**:
-   Update `config.py` with your default proxy URL:
-   ```python
-   PROXY_URL = "http://username:password@host:port"
-   ```
-4. **Web Dashboard**:
-   Provide the **Proxy URL (Optional)** in the Scraper control tab when starting a scrape.
+Add the values to `.env`:
 
-> [!TIP]
-> **ScrapingAnt Integration Note**: ScrapingAnt usernames must be prefixed with `customer-` (e.g., `customer-YOUR_USERNAME`). When integrating ScrapingAnt with Python `requests` or `aiohttp`, use the **HTTPS** proxy protocol on port **443** (e.g., `https://customer-YOUR_USERNAME:PASSWORD@datacenter.scrapingant.com:443`) for correct secure SSL tunnel authentication.
+```dotenv
+REDDIT_CLIENT_ID=your_app_id
+REDDIT_CLIENT_SECRET=your_app_secret
+REDDIT_USER_AGENT=complaint-desk-reddit-radar/0.1 by your_reddit_username
+```
 
----
+### OpenAI API Key
 
-### Recommended Proxy Provider
+Create an API key in the
+[OpenAI platform](https://platform.openai.com/api-keys), then add it to `.env`:
 
-For the most reliable scraping performance, we recommend **[ScrapingAnt](https://scrapingant.com/?ref=yjk4mme)**. They provide high-performance datacenter proxies (for speed and economy) and residential proxies (for bypassing strict blocks).
+```dotenv
+OPENAI_API_KEY=your_openai_api_key
+```
 
-#### 🛜 Datacenter Proxies (Fast & Cost-Effective)
-Great for scraping mirrors and moderate-volume queries:
-* **[Get ScrapingAnt Datacenter Proxies](https://scrapingant.com/datacenter-proxies?ref=yjk4mme)**
-* Apply coupon code **`ENTHUSIAST_50`** during checkout for a **50% discount** on the Enthusiast plan.
+The raw Reddit fetch does not need an OpenAI key. AI scoring does not need
+Reddit credentials.
 
-[![ScrapingAnt Datacenter Proxies](docs/datacenterproxies.png)](https://scrapingant.com/datacenter-proxies?ref=yjk4mme)
+## Commands
 
-#### 🏠 Residential Proxies (Highly Anonymous)
-The gold standard for undetected scraping. Bypasses strict anti-scraping protections:
-* **[Get ScrapingAnt Residential Proxies](https://scrapingant.com/residential-proxies?ref=yjk4mme)**
-* Apply coupon code **`MICRO_50`** during checkout for a **50% discount** on the Micro residential plan.
-
-[![ScrapingAnt Residential Proxies](docs/ResidentialProxies.png)](https://scrapingant.com/residential-proxies?ref=yjk4mme)
-
----
-
-## 📖 All Commands
-
-### 🔄 Scraping
+Fetch posts from the last seven days:
 
 ```bash
-# Full scrape (posts + media + comments)
-python main.py delhi --mode full --limit 100
-
-# Fast history-only (no media/comments)
-python main.py delhi --mode history --limit 500
-
-# Live monitor (checks every 5 min)
-python main.py delhi --mode monitor
-
-# Scrape a user's posts
-python main.py spez --user --mode full --limit 50
-
-# Skip media or comments
-python main.py delhi --no-media --limit 200
-python main.py delhi --no-comments --limit 200
+python3 reddit_radar.py --days 7 --output raw_posts.csv
 ```
 
-### 🧪 Dry Run Mode
-
-Test scrape rules without saving any data:
+Inspect fewer recent posts per subreddit or override the search targets:
 
 ```bash
-python main.py python --mode full --limit 50 --dry-run
+python3 reddit_radar.py \
+  --days 3 \
+  --output raw_posts.csv \
+  --limit-per-subreddit 50 \
+  --subreddits shopify ecommerce \
+  --keywords refund chargeback "difficult customer"
 ```
 
-Output:
-```
-🧪 DRY RUN MODE - No data will be saved
-🧪 DRY RUN COMPLETE!
-   📊 Would scrape: 100 posts
-   💬 Would scrape: 245 comments
-```
-
-### 🔌 Plugins
-
-Enable post-processing plugins:
+AI-score a raw CSV:
 
 ```bash
-# List available plugins
-python main.py --list-plugins
-
-# Run with plugins enabled
-python main.py python --mode full --plugins
+python3 score_posts.py --input raw_posts.csv --output scored_posts.csv
 ```
 
-**Built-in Plugins:**
-| Plugin | Description |
-|--------|-------------|
-| `sentiment_tagger` | Adds sentiment scores to posts |
-| `deduplicator` | Removes duplicate posts |
-| `keyword_extractor` | Extracts top keywords |
-
-Create custom plugins in `plugins/` folder.
-
-### 📊 Dashboard
+Score only the first 50 input rows or override the default model:
 
 ```bash
-python main.py --dashboard
-# Opens at http://localhost:8501
+python3 score_posts.py \
+  --input raw_posts.csv \
+  --output scored_posts.csv \
+  --max-rows 50 \
+  --model gpt-4.1-mini
 ```
 
-**Dashboard Tabs:**
-- 📊 Overview - Stats & charts
-- 📈 Analytics - Sentiment & keywords
-- 🔍 Search - Query scraped data
-- 💬 Comments - Comment analysis
-- ⚙️ Scraper - Start new scrapes
-- 📋 Job History - View all jobs
-- 🔌 Integrations - API, export, plugins
-
-### 🚀 REST API
+Run fetching and scoring together:
 
 ```bash
-python main.py --api
-# API at http://localhost:8000
-# Docs at http://localhost:8000/docs
+python3 run_radar.py \
+  --days 7 \
+  --raw raw_posts.csv \
+  --scored scored_posts.csv \
+  --max-rows 100
 ```
 
-**Endpoints:**
-| Endpoint | Description |
-|----------|-------------|
-| `GET /posts` | List posts with filters |
-| `GET /comments` | List comments |
-| `GET /subreddits` | All scraped subreddits |
-| `GET /jobs` | Job history |
-| `GET /query?sql=...` | Raw SQL queries |
-| `GET /grafana/query` | Grafana time-series |
+## CSV Outputs
 
-### 📦 Export & Maintenance
+The raw CSV contains:
+
+```text
+post_id, subreddit, title, body, url, permalink, created_utc, created_iso,
+age_hours, score, num_comments, matched_keywords
+```
+
+It is sorted by newest post first, then by comment count descending.
+
+The scored CSV includes every raw column plus:
+
+```text
+relevance_score_1_10, pain_category, urgency, current_tool_mentioned,
+is_potential_beta_user, dm_research_worthy, suggested_comment_angle, reason
+```
+
+It is sorted by relevance score descending, then by newest post first.
+
+`sample_raw_posts.csv` contains two fake rows for trying the scorer format:
 
 ```bash
-# Export to Parquet (for DuckDB/warehouses)
-python main.py --export-parquet python
-
-# View job history
-python main.py --job-history
-
-# Backup database
-python main.py --backup
-
-# Optimize database
-python main.py --vacuum
+python3 score_posts.py \
+  --input sample_raw_posts.csv \
+  --output sample_scored_posts.csv
 ```
 
-### 📅 Scheduled Scraping
+## Testing
+
+The unit tests are offline and do not call Reddit or OpenAI:
 
 ```bash
-# Scrape every 60 minutes
-python main.py --schedule delhi --every 60
-
-# With options
-python main.py --schedule delhi --every 30 --mode full --limit 50
+python3 -m unittest discover -v
+python3 reddit_radar.py --help
+python3 score_posts.py --help
+python3 run_radar.py --help
 ```
 
-### 🔍 Search & Analytics
+The scripts report which environment variables are missing when credentials
+have not been configured.
 
-```bash
-# Search scraped data
-python main.py --search "credit card" --min-score 100
+## Responsible Reddit Usage
 
-# Run sentiment analysis
-python main.py --analyze delhi --sentiment
+This tool is for research and finding public conversations where you may be
+able to contribute helpful answers. Do not spam, mass-DM, automate comments,
+scrape aggressively, or violate Reddit rules.
 
-# Extract keywords
-python main.py --analyze delhi --keywords
-```
-
----
-
-## 🐳 Docker
-
-### Quick Start
-
-```bash
-# Build
-docker build -t reddit-scraper .
-
-# Run scrape
-docker run -v ./data:/app/data reddit-scraper python --limit 100
-
-# Run with plugins
-docker run -v ./data:/app/data reddit-scraper python --plugins
-```
-
-### Docker Compose (Full Stack)
-
-```bash
-# Start API + Dashboard
-docker-compose up -d
-
-# Access:
-# Dashboard: http://localhost:8501
-# API: http://localhost:8000/docs
-```
-
-### Deploy to AWS/VPS
-
-```bash
-# SSH into your server
-ssh user@your-server-ip
-
-# Clone repo
-git clone https://github.com/ksanjeev284/reddit-universal-scraper.git
-cd reddit-universal-scraper
-
-# Start services
-docker-compose up -d
-
-# Open firewall ports
-sudo ufw allow 8000
-sudo ufw allow 8501
-```
-
-Access:
-- `http://your-server-ip:8501` → Dashboard
-- `http://your-server-ip:8000/docs` → API
-
----
-
-## 🔗 External Integrations
-
-### Metabase
-
-1. Start API: `python main.py --api`
-2. Add HTTP datasource: `http://localhost:8000`
-3. Query: `/posts?subreddit=python&limit=100`
-
-### Grafana
-
-1. Install "JSON API" or "Infinity" plugin
-2. Add datasource: `http://localhost:8000`
-3. Use `/grafana/query` for time-series
-
-### DuckDB
-
-```python
-import duckdb
-
-# Export to Parquet first
-# python main.py --export-parquet python
-
-# Query directly
-duckdb.query("SELECT * FROM 'data/parquet/*.parquet'").df()
-```
-
----
-
-## 📁 Project Structure
-
-```
-reddit-scraper/
-├── main.py              # CLI entry point
-├── config.py            # Settings
-├── analytics/           # Sentiment & keywords
-├── alerts/              # Discord/Telegram
-├── api/                 # REST API server
-├── dashboard/           # Streamlit UI
-├── export/              # Database & exports
-├── plugins/             # Post-processing plugins
-├── scheduler/           # Cron scheduling
-├── search/              # Search engine
-└── data/
-    ├── r_subreddit/     # Scraped data
-    ├── backups/         # DB backups
-    └── parquet/         # Parquet exports
-```
-
----
-
-## 📊 Data Output
-
-### posts.csv
-| Column | Description |
-|--------|-------------|
-| id | Reddit post ID |
-| title | Post title |
-| author | Username |
-| score | Net upvotes |
-| num_comments | Comment count |
-| post_type | text/image/video/gallery |
-| selftext | Post body |
-| sentiment_score | -1.0 to 1.0 (with plugins) |
-
-### comments.csv
-| Column | Description |
-|--------|-------------|
-| comment_id | Comment ID |
-| post_permalink | Parent post |
-| author | Username |
-| body | Comment text |
-| score | Upvotes |
-
----
-
-## ⚙️ Environment Variables
-
-```bash
-# Notifications
-export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
-export TELEGRAM_BOT_TOKEN="123456:ABC..."
-export TELEGRAM_CHAT_ID="987654321"
-```
-
----
-
-## 📜 License
-
-MIT License - Feel free to use, modify, and distribute.
-
-## 🤝 Contributing
-
-Pull requests welcome! For major changes, please open an issue first.
+AI scores are research aids, not facts. Review every post yourself before
+commenting or sending a polite research message.

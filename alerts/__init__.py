@@ -1,2 +1,1 @@
-# Alerts module
-from .notifications import *
+"""Legacy alerts package; not used by Complaint Desk Reddit Radar V1."""

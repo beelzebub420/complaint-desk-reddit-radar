@@ -1,2 +1,1 @@
-"""Reddit Scraper REST API"""
-from .server import app
+"""Legacy REST API package; not used by Complaint Desk Reddit Radar V1."""

@@ -1,6 +1,12 @@
 data/
 __pycache__/
 .env
+.env.*
+!.env.example
 logs/
 *.sqlite
 *.db
+*.csv
+!sample_raw_posts.csv
+.venv/
+venv/

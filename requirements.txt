@@ -1,24 +1,3 @@
-# Core
-pandas
-requests
-
-# Async
-aiohttp
-aiofiles
-
-# Dashboard
-streamlit
-
-# Export
-openpyxl
-pyarrow
-
-# REST API
-fastapi
-uvicorn
-
-# System & Analytics
-psutil
-duckdb
-defusedxml
-
+praw>=7.7,<8
+python-dotenv>=1.0,<2
+openai>=1.66,<3
